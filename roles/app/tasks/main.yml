@@ -1,0 +1,51 @@
+- local_action:
+    module: rds_instance_facts
+    region: "{{ region }}"
+    db_instance_identifier: app
+  register: rds
+
+- debug:
+    msg: "{{ rds.instances[0].endpoint.address }}"
+- set_fact:
+    POSTGRES_HOST: "{{ rds.instances[0].endpoint.address }}"
+
+- name: copy app.py
+  copy:
+    src: app.py
+    dest: /opt/
+    mode: 755
+  register: app
+  become: yes
+  
+- name: copy templates
+  copy:
+    src: templates
+    dest: /opt/
+    directory_mode: yes
+  register: templates
+  become: yes
+
+- name: remove app
+  docker_container:
+    name: app
+    state: absent
+  become: yes
+  when: templates.changed or app.changed
+
+- name: start the container
+  docker_container:
+    name: app
+    image: python:3.7.3
+    volumes:
+      - /opt:/app
+    state: started
+    command: bash -c "pip install flask psycopg2 Flask-SQLAlchemy && /app/app.py"
+    ports:
+      - "0.0.0.0:80:8000"
+    restart_policy: always
+    env:
+      POSTGRES_DB: "{{ POSTGRES_DB }}"
+      POSTGRES_USER: "{{ POSTGRES_USER }}"
+      POSTGRES_PW: "{{ POSTGRES_PW }}"
+      POSTGRES_HOST: "{{ POSTGRES_HOST }}"
+  become: yes
