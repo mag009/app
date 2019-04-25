@@ -1,0 +1,145 @@
+---
+  - name: Provision EC2 Instances
+    hosts: localhost
+    gather_facts: False
+    tasks:
+      - name: Create key
+        ec2_key:
+          name: "default"
+          region: "{{ region }}"
+          key_material: '{{ key }}'
+
+      - name: Create a security group
+        ec2_group:
+          region: "{{ region }}"
+          name: "{{ security_group }}"
+          description: Security Group for app server
+          rules:
+            - proto: tcp
+              from_port: 22
+              to_port: 22
+              cidr_ip: 0.0.0.0/0
+            - proto: tcp
+              from_port: 80
+              to_port: 80
+              cidr_ip: 172.31.0.0/16 #allow internal load-balancer
+          rules_egress:
+            - proto: all
+              cidr_ip: 0.0.0.0/0
+        register: basic_firewall
+
+      - name: Create a security group RDS
+        ec2_group:
+          region: "{{ region }}"
+          name: "rds"
+          description: Security Group for postgres server
+          rules:
+            - proto: tcp
+              from_port: 5432
+              to_port: 5432
+              cidr_ip: 172.31.0.0/16 #allow internal web server access to postgresql
+          rules_egress:
+            - proto: all
+              cidr_ip: 0.0.0.0/0
+
+      - name: Create EC2 Instances
+        ec2:
+          group: "{{ security_group }}"
+          instance_type: "{{ instance_type }}" 
+          image: "{{ image }}"
+          wait: yes
+          region: "{{ region }}"
+          key_name: "default"
+          instance_tags:
+            environment: "{{ env }}"
+          count_tag: environment
+          exact_count: "{{ count }}"
+        register: ec2
+
+      - rds:
+          region: "{{ region }}"
+          command: create
+          publicly_accessible: no
+          backup_retention: 0
+          instance_name: app
+          db_engine: postgres
+          size: 5
+          instance_type: db.t2.micro
+          db_name: "{{ POSTGRES_DB }}"
+          username: "{{ POSTGRES_USER }}"
+          password: "{{ POSTGRES_PW }}"
+          wait: yes
+          tags:
+            environment: "{{ env }}"
+
+      - ec2_group_facts:
+          region: "{{ region }}"
+          filters:
+            group-name: rds
+        register: rds_firewall
+
+      - rds_instance:
+          region: "{{ region }}"
+          db_instance_identifier: app
+          vpc_security_group_ids: "{{ rds_firewall.security_groups[0].group_id }}"
+
+      - name: Add new instance to host group
+        add_host:
+          hostname: "{{ item.public_ip }}"
+          groupname: new
+        with_items: "{{ ec2.instances }}"
+
+      - name: Wait for SSH to come up
+        wait_for:
+          host: "{{ item.public_ip }}"
+          port: 22
+          delay: 60
+          timeout: 200
+        with_items: "{{ ec2.instances }}"
+
+      - ec2_elb_lb:
+          name: "app"
+          region: "{{ region }}"
+          state: present
+          zones: "{{ zones }}"
+          listeners:
+            - protocol: http
+              load_balancer_port: 80
+              instance_port: 80
+              proxy_protocol: True
+          health_check:
+            ping_protocol: tcp
+            ping_port: 80
+            ping_path: "/"
+            response_timeout: 5
+            interval: 10
+            unhealthy_threshold: 3
+            healthy_threshold: 3
+        register: elb
+
+  - name: Configure instances
+    hosts: new
+    remote_user: ubuntu
+    gather_facts: False
+    roles:
+      - common
+      - app
+    post_tasks:
+      - local_action:
+          module: ec2_instance_facts
+          region: "{{ region }}"
+          filters:
+            "tag:environment": prod
+            instance-state-name: running
+            ip-address: "{{ ansible_host }}"
+        register: instances
+
+      - name: Instance Register
+        local_action:
+          module: ec2_elb
+          region: "{{ region }}"
+          instance_id: "{{ item.instance_id }}"
+          ec2_elbs: app
+          state: present
+        with_items: "{{ instances.instances }}"
+
