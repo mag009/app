@@ -1,0 +1,8 @@
+---
+  - name: deploy app
+    hosts: all
+    serial: 1 # one at a time so we keep at least an active node in ELB
+    remote_user: ubuntu
+    gather_facts: False
+    roles:
+      - app
