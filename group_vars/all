@@ -1,0 +1,17 @@
+POSTGRES_USER: app
+POSTGRES_PW: password
+POSTGRES_DB: app
+instance_type: t2.micro
+security_group: app
+image: ami-0a313d6098716f372 #ubuntu 18.04
+key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDBqKzMgpGMw5kLW8p9kwi/IbB1qnU1TKtkf8AoMnPNmkSISD9psCfDIBMp+DsSxmbdY+24JioRoJMbrEoZTMuYB3zLu2g/FkqKiOmPDNPGyeFN57sxrMg/9Gx+p3NRmUVH2P9qrowrP3NFCKI9UNdDY9z1aXxFgSePCtzcSxagTqXaNTNLI7h47PkhIpfVxy/kv6/BF1xgCYeMzJjuPIxeKqOBpy3BXC3DY1WCDSY9oORQ9C5R9rMPPorjZGTMq5Z3EurVmrxJlc5EStlo6F/8i+KTQadSGYBXdS9QWAgd69Y4tA56kdRLY5lOhr8FqDbp+vil7wASAqBZdNBuEFyX mgatien@summer 
+region: us-east-1
+count: 1
+env: prod
+zones:
+  - us-east-1a
+  - us-east-1b
+  - us-east-1c
+  - us-east-1d
+  - us-east-1e
+  - us-east-1f
