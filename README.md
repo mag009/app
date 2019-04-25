@@ -15,7 +15,9 @@ ansible-playbook provision.yml
 #
 # deploy/update the app
 # 
-# requires AWS to fetch the RDS db host dynamically
+
+* requires AWS to fetch the RDS db host dynamically
+
 ```
 export AWS_ACCESS_KEY_ID=''
 export AWS_SECRET_ACCESS_KEY=''
